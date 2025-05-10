@@ -197,6 +197,33 @@ def update_database_status(wamid: str, status: str, message_timestamp: str,
         if conn and conn.is_connected():
             conn.close()
 
+def update_dlr_status(message_id: str, status: str) -> None:
+    """Update the dlr_status for a given message_id."""
+    conn = get_db_connection()
+    if not conn:
+        return
+    
+    cursor = None
+    try:
+        cursor = conn.cursor()
+        query = """
+        UPDATE smsc_responses
+        SET dlr_status = %s
+        WHERE message_id = %s
+        """
+        cursor.execute(query, (status, message_id))
+        conn.commit()
+    except Error as e:
+        logging.error(f"Failed to update dlr_status: {e}")
+        if conn.is_connected():
+            conn.rollback()
+    finally:
+        if cursor:
+            cursor.close()
+        if conn and conn.is_connected():
+            conn.close()
+
+
 def call_dlr_webhook(data: Dict[str, Any]):
     """Call the DLR webhook with the provided data."""
     payload = {
@@ -209,6 +236,8 @@ def call_dlr_webhook(data: Dict[str, Any]):
     
     try:
         response = requests.post(DLR_WEBHOOK_URL, json=payload, timeout=10)
+        dlr_status = 'sent' if response.status_code == 200 else 'failed'
+        update_dlr_status(data.get("message_id"), dlr_status)
         if response.status_code == 200:
             logging.info(f"DLR webhook response: Status={response.status_code}, Body={response.text}")
             return True

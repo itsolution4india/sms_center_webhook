@@ -209,8 +209,14 @@ def call_dlr_webhook(data: Dict[str, Any]):
     
     try:
         response = requests.post(DLR_WEBHOOK_URL, json=payload, timeout=10)
-        logging.info(f"DLR webhook response: Status={response.status_code}, Body={response.text}")
-        return response.status_code == 200
+        if response.status_code == 200:
+            logging.info(f"DLR webhook response: Status={response.status_code}, Body={response.text}")
+            return True
+        else:
+            logging.error(
+                f"DLR webhook failed: Status={response.status_code}, Body={response.text}, Payload={payload}"
+            )
+            return False
     except Exception as e:
         logging.error(f"Error calling DLR webhook: {e}")
         return False

@@ -136,10 +136,11 @@ def update_database_status(wamid: str, status: str, message_timestamp: str,
                           error_message: Optional[str] = None,
                           contact_name: Optional[str] = None) -> Tuple[bool, Optional[Dict]]:
     """
-    Update the database record with new status information and fetch related data.
+    Update the database record with new status information and fetch related data
+    unless the dlr_status is 'sent'.
     
     Returns:
-        Tuple[bool, Dict]: Success flag and dictionary containing fetched data if successful
+        Tuple[bool, Dict]: Success flag and dictionary containing fetched data if applicable
     """
     conn = get_db_connection()
     if not conn:
@@ -149,7 +150,20 @@ def update_database_status(wamid: str, status: str, message_timestamp: str,
     try:
         cursor = conn.cursor(dictionary=True)
         
-        # First, update the record with new status information
+        # Step 1: Check current dlr_status
+        check_query = "SELECT dlr_status FROM smsc_responses WHERE wamid = %s"
+        cursor.execute(check_query, (wamid,))
+        result = cursor.fetchone()
+
+        if not result:
+            logging.warning(f"No record found with wamid: {wamid}")
+            return False, None
+
+        if result["dlr_status"] == "sent":
+            logging.info(f"DLR already sent for wamid: {wamid}, skipping fetch")
+            return True, None  # No need to fetch/send again
+
+        # Step 2: Update the record
         update_query = """
         UPDATE smsc_responses
         SET status = %s, 
@@ -158,18 +172,17 @@ def update_database_status(wamid: str, status: str, message_timestamp: str,
             error_message = %s
         """
         update_params = [status, message_timestamp, error_code, error_message]
-        
-        # Add contact_name to update if provided
+
         if contact_name:
             update_query += ", contact_name = %s"
             update_params.append(contact_name)
-            
+        
         update_query += " WHERE wamid = %s"
         update_params.append(wamid)
-        
+
         cursor.execute(update_query, update_params)
         
-        # Then fetch the necessary data for the DLR webhook
+        # Step 3: Fetch DLR webhook data if update was successful
         if cursor.rowcount > 0:
             fetch_query = """
             SELECT username, source_addr, destination_addr, message_id, status
@@ -178,14 +191,13 @@ def update_database_status(wamid: str, status: str, message_timestamp: str,
             """
             cursor.execute(fetch_query, (wamid,))
             record = cursor.fetchone()
-            
             conn.commit()
             return True, record
         else:
-            logging.warning(f"No record found with wamid: {wamid}")
+            logging.warning(f"Update failed or no rows affected for wamid: {wamid}")
             conn.commit()
             return False, None
-            
+
     except Error as e:
         logging.error(f"Database error: {e}")
         if conn.is_connected():

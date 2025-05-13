@@ -246,21 +246,21 @@ def call_dlr_webhook(data: Dict[str, Any]):
         "status": data.get("status")
     }
     
-    try:
-        response = requests.post(DLR_WEBHOOK_URL, json=payload, timeout=10)
-        dlr_status = 'sent' if response.status_code == 200 else 'failed'
-        update_dlr_status(data.get("message_id"), dlr_status)
-        if response.status_code == 200:
-            logging.info(f"DLR webhook response: Status={response.status_code}, Body={response.text}")
-            return True
-        else:
-            logging.error(
-                f"DLR webhook failed: Status={response.status_code}, Body={response.text}, Payload={payload}"
-            )
-            return False
-    except Exception as e:
-        logging.error(f"Error calling DLR webhook: {e}")
-        return False
+    # try:
+    #     response = requests.post(DLR_WEBHOOK_URL, json=payload, timeout=10)
+    #     dlr_status = 'sent' if response.status_code == 200 else 'failed'
+    #     update_dlr_status(data.get("message_id"), dlr_status)
+    #     if response.status_code == 200:
+    #         logging.info(f"DLR webhook response: Status={response.status_code}, Body={response.text}")
+    #         return True
+    #     else:
+    #         logging.error(
+    #             f"DLR webhook failed: Status={response.status_code}, Body={response.text}, Payload={payload}"
+    #         )
+    #         return False
+    # except Exception as e:
+    #     logging.error(f"Error calling DLR webhook: {e}")
+    return True
 
 # Background task to handle webhook data
 async def process_webhook(body: Dict[str, Any], account_id: str):

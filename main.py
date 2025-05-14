@@ -136,69 +136,55 @@ def update_database_status(wamid: str, status: str, message_timestamp: str,
                           error_message: Optional[str] = None,
                           contact_name: Optional[str] = None) -> Tuple[bool, Optional[Dict]]:
     """
-    Update the database record with new status information and fetch related data
-    unless the dlr_status is 'sent'.
+    Update the database record if wamid exists, else insert a new record.
     
     Returns:
-        Tuple[bool, Dict]: Success flag and dictionary containing fetched data if applicable
+        Tuple[bool, Optional[Dict]]: Success flag and optional data.
     """
     conn = get_db_connection()
     if not conn:
         return False, None
-    
+
     cursor = None
     try:
         cursor = conn.cursor(dictionary=True)
-        
-        # Step 1: Check current dlr_status
-        check_query = "SELECT dlr_status FROM smsc_responses WHERE wamid = %s"
-        cursor.execute(check_query, (wamid,))
-        result = cursor.fetchone()
 
-        if not result:
-            logging.warning(f"No record found with wamid: {wamid}")
-            return False, None
+        # Step 1: Check if the wamid exists
+        cursor.execute("SELECT id FROM smsc_responses WHERE wamid = %s", (wamid,))
+        record = cursor.fetchone()
 
-        if result["dlr_status"] == "sent":
-            logging.info(f"DLR already sent for wamid: {wamid}, skipping fetch")
-            return True, None  # No need to fetch/send again
-
-        # Step 2: Update the record
-        update_query = """
-        UPDATE smsc_responses
-        SET status = %s, 
-            message_timestamp = %s,
-            error_code = %s,
-            error_message = %s
-        """
-        update_params = [status, message_timestamp, error_code, error_message]
-
-        if contact_name:
-            update_query += ", contact_name = %s"
-            update_params.append(contact_name)
-        
-        update_query += " WHERE wamid = %s"
-        update_params.append(wamid)
-
-        cursor.execute(update_query, update_params)
-        
-        # Step 3: Fetch DLR webhook data if update was successful
-        if cursor.rowcount > 0:
-            fetch_query = """
-            SELECT username, source_addr, destination_addr, message_id, status
-            FROM smsc_responses
-            WHERE wamid = %s
+        if record:
+            # Step 2: Perform update
+            update_query = """
+            UPDATE smsc_responses
+            SET status = %s,
+                message_timestamp = %s,
+                error_code = %s,
+                error_message = %s
             """
-            cursor.execute(fetch_query, (wamid,))
-            record = cursor.fetchone()
-            conn.commit()
-            return True, record
-        else:
-            logging.warning(f"Update failed or no rows affected for wamid: {wamid}")
-            conn.commit()
-            return False, None
+            update_params = [status, message_timestamp, error_code, error_message]
 
-    except Error as e:
+            if contact_name:
+                update_query += ", contact_name = %s"
+                update_params.append(contact_name)
+
+            update_query += " WHERE wamid = %s"
+            update_params.append(wamid)
+
+            cursor.execute(update_query, update_params)
+        else:
+            # Step 3: Perform insert
+            insert_query = """
+            INSERT INTO smsc_responses (wamid, status, message_timestamp, error_code, error_message, contact_name)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            """
+            insert_params = [wamid, status, message_timestamp, error_code, error_message, contact_name]
+            cursor.execute(insert_query, insert_params)
+
+        conn.commit()
+        return True, True
+
+    except Exception as e:
         logging.error(f"Database error: {e}")
         if conn.is_connected():
             conn.rollback()
@@ -246,20 +232,20 @@ def call_dlr_webhook(data: Dict[str, Any]):
         "status": data.get("status")
     }
     
-    # try:
-    #     response = requests.post(DLR_WEBHOOK_URL, json=payload, timeout=10)
-    #     dlr_status = 'sent' if response.status_code == 200 else 'failed'
-    #     update_dlr_status(data.get("message_id"), dlr_status)
-    #     if response.status_code == 200:
-    #         logging.info(f"DLR webhook response: Status={response.status_code}, Body={response.text}")
-    #         return True
-    #     else:
-    #         logging.error(
-    #             f"DLR webhook failed: Status={response.status_code}, Body={response.text}, Payload={payload}"
-    #         )
-    #         return False
-    # except Exception as e:
-    #     logging.error(f"Error calling DLR webhook: {e}")
+    try:
+        response = requests.post(DLR_WEBHOOK_URL, json=payload, timeout=10)
+        dlr_status = 'sent' if response.status_code == 200 else 'failed'
+        update_dlr_status(data.get("message_id"), dlr_status)
+        if response.status_code == 200:
+            logging.info(f"DLR webhook response: Status={response.status_code}, Body={response.text}")
+            return True
+        else:
+            logging.error(
+                f"DLR webhook failed: Status={response.status_code}, Body={response.text}, Payload={payload}"
+            )
+            return False
+    except Exception as e:
+        logging.error(f"Error calling DLR webhook: {e}")
     return True
 
 # Background task to handle webhook data
@@ -285,10 +271,10 @@ async def process_webhook(body: Dict[str, Any], account_id: str):
             )
             
             # If database update was successful and we have the required data, call DLR webhook
-            if success and record:
-                call_dlr_webhook(record)
-            else:
-                logging.warning(f"Could not update database or fetch required data for wamid: {wamid}")
+            # if success and record:
+            #     call_dlr_webhook(record)
+            # else:
+            #     logging.warning(f"Could not update database or fetch required data for wamid: {wamid}")
         else:
             logging.warning("No wamid found in webhook data")
         

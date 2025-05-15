@@ -153,6 +153,9 @@ def update_database_status(wamid: str, status: str, message_timestamp: str,
         cursor.execute("SELECT id FROM smsc_responses WHERE wamid = %s", (wamid,))
         record = cursor.fetchone()
 
+        # Determine dlr_status based on status
+        dlr_status = "skip" if status.lower() == "reply" else "pending"
+
         if record:
             # Step 2: Perform update
             update_query = """
@@ -169,6 +172,10 @@ def update_database_status(wamid: str, status: str, message_timestamp: str,
                 update_query += ", contact_name = %s"
                 update_params.append(contact_name)
 
+            if dlr_status:
+                update_query += ", dlr_status = %s"
+                update_params.append(dlr_status)
+
             update_query += " WHERE wamid = %s"
             update_params.append(wamid)
 
@@ -176,10 +183,11 @@ def update_database_status(wamid: str, status: str, message_timestamp: str,
         else:
             # Step 3: Perform insert
             insert_query = """
-            INSERT INTO smsc_responses (wamid, status, message_timestamp, error_code, error_message, contact_name, message_body)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO smsc_responses 
+                (wamid, status, message_timestamp, error_code, error_message, contact_name, message_body, dlr_status)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
             """
-            insert_params = [wamid, status, message_timestamp, error_code, error_message, contact_name, message_body]
+            insert_params = [wamid, status, message_timestamp, error_code, error_message, contact_name, message_body, dlr_status]
             cursor.execute(insert_query, insert_params)
 
         conn.commit()

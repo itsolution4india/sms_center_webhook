@@ -133,7 +133,8 @@ def parse_webhook_response(response: Dict[str, Any]) -> Dict[str, Any]:
 def update_database_status(wamid: str, status: str, message_timestamp: str, 
                           error_code: Optional[int] = None, 
                           error_message: Optional[str] = None,
-                          contact_name: Optional[str] = None) -> Tuple[bool, Optional[Dict]]:
+                          contact_name: Optional[str] = None,
+                          message_body: Optional[str] = None) -> Tuple[bool, Optional[Dict]]:
     """
     Update the database record if wamid exists, else insert a new record.
     
@@ -159,9 +160,10 @@ def update_database_status(wamid: str, status: str, message_timestamp: str,
             SET status = %s,
                 message_timestamp = %s,
                 error_code = %s,
-                error_message = %s
+                error_message = %s,
+                message_body = %s
             """
-            update_params = [status, message_timestamp, error_code, error_message]
+            update_params = [status, message_timestamp, error_code, error_message, message_body]
 
             if contact_name:
                 update_query += ", contact_name = %s"
@@ -174,14 +176,14 @@ def update_database_status(wamid: str, status: str, message_timestamp: str,
         else:
             # Step 3: Perform insert
             insert_query = """
-            INSERT INTO smsc_responses (wamid, status, message_timestamp, error_code, error_message, contact_name)
-            VALUES (%s, %s, %s, %s, %s, %s)
+            INSERT INTO smsc_responses (wamid, status, message_timestamp, error_code, error_message, contact_name, message_body)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
             """
-            insert_params = [wamid, status, message_timestamp, error_code, error_message, contact_name]
+            insert_params = [wamid, status, message_timestamp, error_code, error_message, contact_name, message_body]
             cursor.execute(insert_query, insert_params)
 
         conn.commit()
-        logging.info(f"SUCCESS, {wamid, status, message_timestamp, error_code, error_message, contact_name}")
+        logging.info(f"SUCCESS, {wamid, status, message_timestamp, error_code, error_message, contact_name, message_body}")
         return True, True
 
     except Exception as e:
@@ -263,10 +265,11 @@ async def process_webhook(body: Dict[str, Any], account_id: str):
             error_code = data.get('error_code')
             error_message = data.get('error_message')
             contact_name = data.get('contact_name')
+            message_body = data.get('message_body')
             
             # Update database and get required data for DLR webhook
             success, record = update_database_status(
-                wamid, status, message_timestamp, error_code, error_message, contact_name
+                wamid, status, message_timestamp, error_code, error_message, contact_name, message_body
             )
             
             # If database update was successful and we have the required data, call DLR webhook

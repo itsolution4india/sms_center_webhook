@@ -43,7 +43,6 @@ def get_db_connection():
     try:
         connection = mysql.connector.connect(**DB_CONFIG)
         if connection.is_connected():
-            logging.info("Database connection established successfully")
             return connection
     except Error as e:
         logging.error(f"Error connecting to MySQL database: {e}")
@@ -182,6 +181,7 @@ def update_database_status(wamid: str, status: str, message_timestamp: str,
             cursor.execute(insert_query, insert_params)
 
         conn.commit()
+        logging.info(f"SUCCESS, {wamid, status, message_timestamp, error_code, error_message, contact_name}")
         return True, True
 
     except Exception as e:
@@ -195,58 +195,58 @@ def update_database_status(wamid: str, status: str, message_timestamp: str,
         if conn and conn.is_connected():
             conn.close()
 
-def update_dlr_status(message_id: str, status: str) -> None:
-    """Update the dlr_status for a given message_id."""
-    conn = get_db_connection()
-    if not conn:
-        return
+# def update_dlr_status(message_id: str, status: str) -> None:
+#     """Update the dlr_status for a given message_id."""
+#     conn = get_db_connection()
+#     if not conn:
+#         return
     
-    cursor = None
-    try:
-        cursor = conn.cursor()
-        query = """
-        UPDATE smsc_responses
-        SET dlr_status = %s
-        WHERE message_id = %s
-        """
-        cursor.execute(query, (status, message_id))
-        conn.commit()
-    except Error as e:
-        logging.error(f"Failed to update dlr_status: {e}")
-        if conn.is_connected():
-            conn.rollback()
-    finally:
-        if cursor:
-            cursor.close()
-        if conn and conn.is_connected():
-            conn.close()
+#     cursor = None
+#     try:
+#         cursor = conn.cursor()
+#         query = """
+#         UPDATE smsc_responses
+#         SET dlr_status = %s
+#         WHERE message_id = %s
+#         """
+#         cursor.execute(query, (status, message_id))
+#         conn.commit()
+#     except Error as e:
+#         logging.error(f"Failed to update dlr_status: {e}")
+#         if conn.is_connected():
+#             conn.rollback()
+#     finally:
+#         if cursor:
+#             cursor.close()
+#         if conn and conn.is_connected():
+#             conn.close()
 
 
-def call_dlr_webhook(data: Dict[str, Any]):
-    """Call the DLR webhook with the provided data."""
-    payload = {
-        "username": data.get("username"),
-        "source_addr": data.get("source_addr"),
-        "destination_addr": data.get("destination_addr"),
-        "message_id": data.get("message_id"),
-        "status": data.get("status")
-    }
+# def call_dlr_webhook(data: Dict[str, Any]):
+#     """Call the DLR webhook with the provided data."""
+#     payload = {
+#         "username": data.get("username"),
+#         "source_addr": data.get("source_addr"),
+#         "destination_addr": data.get("destination_addr"),
+#         "message_id": data.get("message_id"),
+#         "status": data.get("status")
+#     }
     
-    try:
-        response = requests.post(DLR_WEBHOOK_URL, json=payload, timeout=10)
-        dlr_status = 'sent' if response.status_code == 200 else 'failed'
-        update_dlr_status(data.get("message_id"), dlr_status)
-        if response.status_code == 200:
-            logging.info(f"DLR webhook response: Status={response.status_code}, Body={response.text}")
-            return True
-        else:
-            logging.error(
-                f"DLR webhook failed: Status={response.status_code}, Body={response.text}, Payload={payload}"
-            )
-            return False
-    except Exception as e:
-        logging.error(f"Error calling DLR webhook: {e}")
-    return True
+#     try:
+#         response = requests.post(DLR_WEBHOOK_URL, json=payload, timeout=10)
+#         dlr_status = 'sent' if response.status_code == 200 else 'failed'
+#         update_dlr_status(data.get("message_id"), dlr_status)
+#         if response.status_code == 200:
+#             logging.info(f"DLR webhook response: Status={response.status_code}, Body={response.text}")
+#             return True
+#         else:
+#             logging.error(
+#                 f"DLR webhook failed: Status={response.status_code}, Body={response.text}, Payload={payload}"
+#             )
+#             return False
+#     except Exception as e:
+#         logging.error(f"Error calling DLR webhook: {e}")
+#     return True
 
 # Background task to handle webhook data
 async def process_webhook(body: Dict[str, Any], account_id: str):
@@ -254,7 +254,6 @@ async def process_webhook(body: Dict[str, Any], account_id: str):
     try:
         # Parse webhook response
         data = parse_webhook_response(body)
-        logging.info(f"Parsed data: {data}")
         
         # Check if we have the necessary data to update the database
         if 'wamid' in data:

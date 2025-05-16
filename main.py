@@ -273,7 +273,10 @@ async def process_webhook(body: Dict[str, Any], account_id: str):
             error_code = data.get('error_code')
             error_message = data.get('error_message')
             contact_name = data.get('contact_name')
-            message_body = data.get('message_body')
+            contact_wa_id = data.get('contact_wa_id')
+            reply_msg = data.get('message_body')
+            
+            message_body = f"{contact_wa_id}: {reply_msg}"
             
             # Update database and get required data for DLR webhook
             success, record = update_database_status(

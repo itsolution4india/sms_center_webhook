@@ -26,13 +26,11 @@ app.add_middleware(
 # Constants
 VERIFY_TOKEN = "hello"
 LOGS_DIR = 'message_logs'
-DASHBOARD_URL = "https://wtsdealnow.com/user_responses/"
-DLR_WEBHOOK_URL = "http://46.202.130.143:1401/dlr_webhook"
 
 # Database configuration
 DB_CONFIG = {
     'host': "localhost",
-    'database': 'smsc_table',
+    'database': 'smsc_db',
     'user': 'prashanth@itsolution4india.com',
     'password': 'Solution@97',
     'port': 3306

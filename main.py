@@ -155,6 +155,7 @@ def update_database_status(wamid: str, status: str, message_timestamp: str,
         dlr_status = "skip" if status.lower() == "reply" else "pending"
 
         if record:
+            dlr_status = None
             # Step 2: Perform update
             update_query = """
             UPDATE smsc_responses

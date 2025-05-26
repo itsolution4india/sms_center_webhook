@@ -128,17 +128,16 @@ def parse_webhook_response(response: Dict[str, Any]) -> Dict[str, Any]:
     
     return report
 
-import random
-
 def update_database_status(wamid: str, status: str, message_timestamp: str, 
                           error_code: Optional[int] = None, 
                           error_message: Optional[str] = None,
                           contact_name: Optional[str] = None,
-                          message_body: Optional[str] = None,
-                          phone_id: Optional[str] = None) -> Tuple[bool, Optional[Dict]]:
+                          message_body: Optional[str] = None) -> Tuple[bool, Optional[Dict]]:
     """
     Update the database record if wamid exists, else insert a new record.
-    If error_code is 131048, deactivate current number and activate a random inactive number for same user.
+    
+    Returns:
+        Tuple[bool, Optional[Dict]]: Success flag and optional data.
     """
     conn = get_db_connection()
     if not conn:
@@ -189,40 +188,6 @@ def update_database_status(wamid: str, status: str, message_timestamp: str,
             """
             insert_params = [wamid, status, message_timestamp, error_code, error_message, contact_name, message_body, dlr_status]
             cursor.execute(insert_query, insert_params)
-
-        # Step 4: Handle error_code 131048 - deactivate and switch number
-        if error_code == 131048 and phone_id:
-            # Deactivate current number
-            cursor.execute("""
-                UPDATE whatsapp_numbers 
-                SET number_status = 'inactive' 
-                WHERE phone_id = %s
-            """, (phone_id,))
-            
-            # Get username for that phone_id
-            cursor.execute("""
-                SELECT username FROM whatsapp_numbers WHERE phone_id = %s
-            """, (phone_id,))
-            user = cursor.fetchone()
-            if user:
-                username = user["username"]
-                # Get all other inactive numbers for this user
-                cursor.execute("""
-                    SELECT phone_id FROM whatsapp_numbers 
-                    WHERE username = %s AND number_status = 'inactive' AND phone_id != %s
-                """, (username, phone_id))
-                options = cursor.fetchall()
-                if options:
-                    new_phone = random.choice(options)['phone_id']
-                    # Activate one of them
-                    cursor.execute("""
-                        UPDATE whatsapp_numbers 
-                        SET number_status = 'active' 
-                        WHERE phone_id = %s
-                    """, (new_phone,))
-                    logging.info(f"Switched active number to {new_phone} for user {username}")
-                else:
-                    logging.warning(f"No other inactive number found for user {username} to activate.")
 
         conn.commit()
         logging.info(f"SUCCESS, {wamid, status, message_timestamp, error_code, error_message, contact_name, message_body}")
@@ -304,7 +269,6 @@ async def process_webhook(body: Dict[str, Any], account_id: str):
             wamid = data.get('wamid')
             status = data.get('status')
             message_timestamp = data.get('message_timestamp')
-            phone_number_id = data.get('phone_number_id')
             error_code = data.get('error_code')
             error_message = data.get('error_message')
             contact_name = data.get('contact_name')
@@ -315,7 +279,7 @@ async def process_webhook(body: Dict[str, Any], account_id: str):
             
             # Update database and get required data for DLR webhook
             success, record = update_database_status(
-                wamid, status, message_timestamp, error_code, error_message, contact_name, message_body, phone_number_id
+                wamid, status, message_timestamp, error_code, error_message, contact_name, message_body
             )
             
             # If database update was successful and we have the required data, call DLR webhook

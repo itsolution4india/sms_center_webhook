@@ -146,7 +146,7 @@ def update_database_status(wamid: str, status: str, message_timestamp: str,
 
     cursor = None
     try:
-        cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor(dictionary=True, buffered=True)
 
         # Step 1: Check if the wamid exists
         cursor.execute("SELECT id FROM smsc_responses WHERE wamid = %s", (wamid,))

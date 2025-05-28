@@ -192,37 +192,46 @@ def update_database_status(wamid: str, status: str, message_timestamp: str,
 
         # Step 4: Handle error_code 131048 - deactivate and switch number
         if error_code == 131048 and phone_id:
-            # Deactivate current number
+            # Check if the current number is active
             cursor.execute("""
-                UPDATE whatsapp_numbers 
-                SET number_status = 'inactive' 
-                WHERE phone_id = %s
+                SELECT number_status FROM whatsapp_numbers WHERE phone_id = %s
             """, (phone_id,))
-            
-            # Get username for that phone_id
-            cursor.execute("""
-                SELECT username FROM whatsapp_numbers WHERE phone_id = %s
-            """, (phone_id,))
-            user = cursor.fetchone()
-            if user:
-                username = user["username"]
-                # Get all other inactive numbers for this user
+            status_result = cursor.fetchone()
+            if status_result and status_result['number_status'] == 'active':
+                # Deactivate current number
                 cursor.execute("""
-                    SELECT phone_id FROM whatsapp_numbers 
-                    WHERE username = %s AND number_status = 'inactive' AND phone_id != %s
-                """, (username, phone_id))
-                options = cursor.fetchall()
-                if options:
-                    new_phone = random.choice(options)['phone_id']
-                    # Activate one of them
+                    UPDATE whatsapp_numbers 
+                    SET number_status = 'inactive' 
+                    WHERE phone_id = %s
+                """, (phone_id,))
+                
+                # Get username for that phone_id
+                cursor.execute("""
+                    SELECT username FROM whatsapp_numbers WHERE phone_id = %s
+                """, (phone_id,))
+                user = cursor.fetchone()
+                if user:
+                    username = user["username"]
+                    # Get all other inactive numbers for this user
                     cursor.execute("""
-                        UPDATE whatsapp_numbers 
-                        SET number_status = 'active' 
-                        WHERE phone_id = %s
-                    """, (new_phone,))
-                    logging.info(f"Switched active number to {new_phone} for user {username}")
-                else:
-                    logging.warning(f"No other inactive number found for user {username} to activate.")
+                        SELECT phone_id FROM whatsapp_numbers 
+                        WHERE username = %s AND number_status = 'inactive' AND phone_id != %s
+                    """, (username, phone_id))
+                    options = cursor.fetchall()
+                    if options:
+                        new_phone = random.choice(options)['phone_id']
+                        # Activate one of them
+                        cursor.execute("""
+                            UPDATE whatsapp_numbers 
+                            SET number_status = 'active' 
+                            WHERE phone_id = %s
+                        """, (new_phone,))
+                        logging.info(f"Switched active number to {new_phone} for user {username}")
+                    else:
+                        logging.warning(f"No other inactive number found for user {username} to activate.")
+                        
+            else:
+                logging.info(f"Skip {phone_id} is already inactived")
 
         conn.commit()
         logging.info(f"SUCCESS, {wamid, status, message_timestamp, error_code, error_message, contact_name, message_body}")
